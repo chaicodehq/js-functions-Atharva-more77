@@ -65,16 +65,94 @@
  */
 export function createElection(candidates) {
   // Your code here
-}
+  let tally = {};
+  const registeredVoters = new Map();  
+  const votedVoterIds    = new Set();
 
+  candidates.forEach(c => { tally[c.id] = 0; });
+  return {
+    registerVoter(voter) {
+      if (!voter || !voter.id || !voter.name || typeof voter.age !== "number") return false;
+      if (voter.age < 18) return false;
+      if (registeredVoters.has(voter.id)) return false;
+
+      registeredVoters.set(voter.id, voter);
+      return true;
+    },
+
+    castVote(voterId, candidateId, onSuccess, onError) {
+      if (!registeredVoters.has(voterId)) {
+        return onError("Voter not registered");
+      }
+      if (!(candidateId in tally)) {
+        return onError("Candidate not found");
+      }
+      if (votedVoterIds.has(voterId)) {
+        return onError("Voter has already voted");
+      }
+      tally = tallyPure(tally, candidateId);
+      votedVoterIds.add(voterId);
+      return onSuccess({ voterId, candidateId });
+    },
+
+    getResults(sortFn) {
+      const results = candidates.map(c => ({
+        ...c,
+        votes: tally[c.id]
+      }));
+
+      const comparator = sortFn ?? ((a, b) => b.votes - a.votes); 
+      return results.sort(comparator);
+    },
+
+    getWinner() {
+      if (votedVoterIds.size === 0) return null;
+
+      return candidates.reduce((best, current) =>
+        tally[current.id] > tally[best.id] ? current : best
+      );
+    }
+  };
+}
 export function createVoteValidator(rules) {
   // Your code here
+  const { minAge = 18, requiredFields = ["id", "name", "age"] } = rules || {};
+
+  return (voter) => {
+    if (!voter) return { valid: false, reason: "Voter is null or undefined" };
+
+    for (const field of requiredFields) {
+      if (!voter[field] && voter[field] !== 0) {
+        return { valid: false, reason: `Missing required field: ${field}` };
+      }
+    }
+
+    if (typeof voter.age === "number" && voter.age < minAge) {
+      return { valid: false, reason: `Voter must be at least ${minAge} years old` };
+    }
+
+    return { valid: true, reason: null };
+  };
 }
 
 export function countVotesInRegions(regionTree) {
   // Your code here
+  if (!regionTree || typeof regionTree !== "object") return 0;
+  if (typeof regionTree.votes !== "number") return 0;
+
+  const subTotal = Array.isArray(regionTree.subRegions)
+    ? regionTree.subRegions.reduce(
+        (sum, region) => sum + countVotesInRegions(region), 0  
+      )
+    : 0;
+
+  return regionTree.votes + subTotal;
 }
 
 export function tallyPure(currentTally, candidateId) {
   // Your code here
+  return {
+    ...currentTally,                                
+    [candidateId]: (currentTally[candidateId] ?? 0) + 1 
+  };
 }
